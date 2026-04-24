@@ -6,11 +6,10 @@
     <title>00865B 套利分析</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* 輸入框高度與文字緊湊化 */
         input[type="number"] { font-size: 18px; font-weight: 900; color: #000000; -webkit-appearance: none; height: 42px; }
-        .locked-field { background-color: #fffbeb !important; border-color: #d97706 !important; color: #92400e !important; }
-        input:checked ~ .dot { transform: translateX(100%); }
-        input:checked ~ .lock-bg { background-color: #d97706; }
         body { color: #000000; }
+        /* 隱藏網頁捲軸，強迫緊湊 */
         html, body { height: 100%; overflow-x: hidden; }
     </style>
 </head>
@@ -27,7 +26,7 @@
                 <p class="text-xs font-black text-black uppercase">總淨利(TWD)</p>
                 <p id="out-total" class="text-2xl md:text-3xl font-black text-black leading-none">NT$ 0</p>
             </div>
-            <button onclick="triggerManualFetch()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-bold text-sm shadow-md active:scale-95">
+            <button onclick="triggerManualFetch()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-bold text-sm shadow-md active:scale-95 transition">
                 🔄 同步
             </button>
         </div>
@@ -78,45 +77,33 @@
                 <div class="flex items-end gap-2">
                     <div class="flex-1">
                         <label class="block text-xs font-black text-black mb-1">00865B 殖利率(%)</label>
-                        <input type="number" id="in-yield" step="0.01" value="5.0" class="w-full px-2 border-2 border-slate-400 rounded-lg transition-all">
+                        <input type="number" id="in-yield" step="0.01" value="5.0" class="w-full px-2 border-2 border-slate-400 rounded-lg transition-all outline-none focus:border-blue-500">
                     </div>
-                    <label class="flex flex-col items-center pb-1 cursor-pointer">
-                        <span class="text-[10px] font-black text-black mb-1" id="label-yield">自動</span>
-                        <div class="relative w-10 h-5">
-                            <input type="checkbox" id="lock-yield" onchange="toggleLock('yield')">
-                            <div class="lock-bg block bg-slate-400 w-10 h-5 rounded-full transition"></div>
-                            <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition duration-200"></div>
-                        </div>
+                    <label class="flex flex-col items-center justify-center pb-2 cursor-pointer w-8">
+                        <span class="text-[10px] font-black text-slate-500 mb-1" id="label-yield">自動</span>
+                        <input type="checkbox" id="lock-yield" onchange="toggleLock('yield')" class="w-4 h-4 cursor-pointer accent-blue-600">
                     </label>
                 </div>
 
                 <div class="flex items-end gap-2">
                     <div class="flex-1">
                         <label class="block text-xs font-black text-black mb-1">進場 USD/TWD</label>
-                        <input type="number" id="in-entry" step="0.01" value="32.50" class="w-full px-2 border-2 border-slate-400 rounded-lg transition-all">
+                        <input type="number" id="in-entry" step="0.01" value="32.50" class="w-full px-2 border-2 border-slate-400 rounded-lg transition-all outline-none focus:border-blue-500">
                     </div>
-                    <label class="flex flex-col items-center pb-1 cursor-pointer">
-                        <span class="text-[10px] font-black text-black mb-1" id="label-entry">自動</span>
-                        <div class="relative w-10 h-5">
-                            <input type="checkbox" id="lock-entry" onchange="toggleLock('entry')">
-                            <div class="lock-bg block bg-slate-400 w-10 h-5 rounded-full transition"></div>
-                            <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition duration-200"></div>
-                        </div>
+                    <label class="flex flex-col items-center justify-center pb-2 cursor-pointer w-8">
+                        <span class="text-[10px] font-black text-slate-500 mb-1" id="label-entry">自動</span>
+                        <input type="checkbox" id="lock-entry" onchange="toggleLock('entry')" class="w-4 h-4 cursor-pointer accent-blue-600">
                     </label>
                 </div>
 
                 <div class="flex items-end gap-2">
                     <div class="flex-1">
                         <label class="block text-xs font-black text-black mb-1">當前/預估匯率</label>
-                        <input type="number" id="in-target" step="0.01" value="32.00" class="w-full px-2 border-2 border-slate-400 rounded-lg transition-all">
+                        <input type="number" id="in-target" step="0.01" value="32.00" class="w-full px-2 border-2 border-slate-400 rounded-lg transition-all outline-none focus:border-blue-500">
                     </div>
-                    <label class="flex flex-col items-center pb-1 cursor-pointer">
-                        <span class="text-[10px] font-black text-black mb-1" id="label-target">自動</span>
-                        <div class="relative w-10 h-5">
-                            <input type="checkbox" id="lock-target" onchange="toggleLock('target')">
-                            <div class="lock-bg block bg-slate-400 w-10 h-5 rounded-full transition"></div>
-                            <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition duration-200"></div>
-                        </div>
+                    <label class="flex flex-col items-center justify-center pb-2 cursor-pointer w-8">
+                        <span class="text-[10px] font-black text-slate-500 mb-1" id="label-target">自動</span>
+                        <input type="checkbox" id="lock-target" onchange="toggleLock('target')" class="w-4 h-4 cursor-pointer accent-blue-600">
                     </label>
                 </div>
             </div>
@@ -128,87 +115,74 @@
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdzXOfzWMndCNLhzXY1-P487LQPfqQQBS0VAyZgz64vDKNwpBWna2vcH-uNU-cGziUERjJZBKvsnle/pub?output=csv";
     const FX_API_URL = "https://open.er-api.com/v6/latest/USD";
 
-    // 參數陣列
     const inputIds = ['in-amount', 'in-days', 'in-loan', 'in-yield', 'in-entry', 'in-target'];
     const lockIds = ['yield', 'entry', 'target'];
 
-    // 系統初始化：讀取所有記憶
+    // 系統初始化
     function initializeSystem() {
-        // 1. 讀取輸入框的數值記憶
+        // 讀取數值記憶
         inputIds.forEach(id => {
             if(localStorage.getItem(id)) {
                 document.getElementById(id).value = localStorage.getItem(id);
             }
-            // 綁定輸入事件：只要修改就存入記憶
             document.getElementById(id).addEventListener('input', () => {
                 localStorage.setItem(id, document.getElementById(id).value);
                 updateAnalysis();
             });
         });
 
-        // 2. 讀取三個鎖定的開關記憶
+        // 讀取鎖定記憶
         lockIds.forEach(field => {
             const isLocked = localStorage.getItem(`lock_${field}`) === 'true';
             document.getElementById(`lock-${field}`).checked = isLocked;
-            // 根據記憶狀態設定 UI (isInit = true 代表不觸發自動抓取)
-            applyLockUI(field, isInit=true); 
+            applyLockUI(field, true); 
         });
 
-        // 3. 初始完成後，執行一次資料同步 (若有解鎖的欄位才抓)
         fetchAllData();
     }
 
-    // 點擊開關時的處理
+    // 切換鎖定狀態
     function toggleLock(field) {
         applyLockUI(field, false);
     }
 
-    // 處理鎖定的 UI 變化與記憶存檔
+    // 處理 UI 變化 (移除變色邏輯，只改文字與存檔)
     function applyLockUI(field, isInit = false) {
         const isLocked = document.getElementById(`lock-${field}`).checked;
-        const input = document.getElementById(`in-${field}`);
         const label = document.getElementById(`label-${field}`);
         
-        // 儲存開關狀態
         localStorage.setItem(`lock_${field}`, isLocked);
 
         if(isLocked) {
             label.innerText = "鎖定";
-            label.className = "text-[10px] font-black text-amber-600 mb-1";
-            input.classList.add('locked-field');
+            label.className = "text-[10px] font-black text-red-600 mb-1";
         } else {
             label.innerText = "自動";
-            label.className = "text-[10px] font-black text-black mb-1";
-            input.classList.remove('locked-field');
-            
-            // 如果是手動解除鎖定，立刻抓取一次最新資料覆蓋它
+            label.className = "text-[10px] font-black text-slate-500 mb-1";
             if(!isInit) fetchAllData();
         }
     }
 
-    // 手動點擊同步按鈕
+    // 手動同步
     function triggerManualFetch() {
         fetchAllData();
     }
 
-    // 雲端與 API 抓取邏輯
+    // 資料同步
     async function fetchAllData() {
         const status = document.getElementById('sync-status');
         status.innerText = "⏳ 同步中...";
         status.className = "text-xs font-bold text-blue-700 leading-none pb-0.5";
 
         try {
-            // API 抓美金
             const fxRes = await fetch(FX_API_URL);
             const fxData = await fxRes.json();
             const liveTwdRate = fxData.rates.TWD;
-            // 「沒被鎖定」才覆寫，且立刻存入記憶
             if(liveTwdRate && !document.getElementById('lock-target').checked) {
                 document.getElementById('in-target').value = liveTwdRate.toFixed(2);
                 localStorage.setItem('in-target', liveTwdRate.toFixed(2));
             }
 
-            // Sheet 抓資料
             const sheetRes = await fetch(CSV_URL);
             const csv = await sheetRes.text();
             const rows = csv.split('\n').map(r => r.split(','));
@@ -233,13 +207,13 @@
             status.className = "text-xs font-bold text-green-700 leading-none pb-0.5";
             updateAnalysis();
         } catch (e) {
-            status.innerText = "❌ 網路離線 (已載入記憶數值)";
+            status.innerText = "❌ 網路離線 (載入記憶數值)";
             status.className = "text-xs font-bold text-red-600 leading-none pb-0.5";
             updateAnalysis();
         }
     }
 
-    // 運算與畫面更新
+    // 計算與更新畫面
     function updateAnalysis() {
         const amount = parseFloat(document.getElementById('in-amount').value) || 0;
         const days = parseFloat(document.getElementById('in-days').value) || 1;
@@ -275,7 +249,7 @@
         `;
     }
 
-    // 網頁載入後，執行初始化記憶讀取程序
+    // 啟動
     window.onload = initializeSystem;
 </script>
 
