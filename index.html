@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>00865B 套利分析</title>
+    <title>00865B 套利分析 (動態壓測版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 輸入框高度與文字緊湊化 */
         input[type="number"] { font-size: 18px; font-weight: 900; color: #000000; -webkit-appearance: none; height: 42px; }
+        .locked-field { background-color: #fffbeb !important; border-color: #d97706 !important; color: #92400e !important; }
+        .stress-field { background-color: #fef2f2 !important; border-color: #ef4444 !important; color: #991b1b !important; }
+        input:checked ~ .dot { transform: translateX(100%); }
+        input:checked ~ .lock-bg { background-color: #d97706; }
         body { color: #000000; }
-        /* 隱藏網頁捲軸，強迫緊湊 */
         html, body { height: 100%; overflow-x: hidden; }
     </style>
 </head>
@@ -35,20 +37,20 @@
     <div class="p-3 space-y-3 flex-1 overflow-y-auto">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
             <div class="bg-blue-50 border-2 border-blue-200 p-2 rounded-lg flex flex-col justify-center">
-                <p class="text-xs font-black text-black mb-0.5">利息淨收益</p>
+                <p class="text-xs font-black text-black mb-0.5">利息淨收益 <span id="label-effective-yield" class="text-[10px] text-blue-600 ml-1"></span></p>
                 <p id="out-interest" class="text-xl font-black text-blue-900 leading-none">NT$ 0</p>
             </div>
             <div id="fx-card" class="bg-slate-50 border-2 border-slate-200 p-2 rounded-lg flex flex-col justify-center">
-                <p id="fx-label" class="text-xs font-black text-black mb-0.5">匯兌損益</p>
+                <p class="text-xs font-black text-black mb-0.5">匯兌損益</p>
                 <p id="out-fx" class="text-xl font-black text-black leading-none">NT$ 0</p>
             </div>
             <div class="bg-emerald-50 border-2 border-emerald-200 p-2 rounded-lg flex flex-col justify-center">
                 <p class="text-xs font-black text-black mb-0.5">利差緩衝度</p>
                 <p id="out-buffer" class="text-xl font-black text-emerald-900 leading-none">0.00%</p>
             </div>
-            <div class="bg-amber-50 border-2 border-amber-300 p-2 rounded-lg shadow-inner flex flex-col justify-center">
-                <p class="text-xs font-black text-black mb-0.5">損益兩平匯率</p>
-                <p id="out-breakeven" class="text-2xl font-black text-amber-900 leading-none">0.000</p>
+            <div class="bg-amber-50 border-2 border-amber-300 p-2 rounded-lg shadow-inner flex flex-col justify-center relative overflow-hidden">
+                <p class="text-xs font-black text-black mb-0.5 z-10">損益兩平匯率</p>
+                <p id="out-breakeven" class="text-2xl font-black text-amber-900 leading-none z-10">0.000</p>
             </div>
         </div>
 
@@ -58,7 +60,7 @@
         </div>
 
         <div class="bg-white rounded-lg p-3 border-2 border-slate-200 space-y-3">
-            <div class="grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-4 gap-3">
                 <div>
                     <label class="block text-xs font-black text-black mb-1">投資本金 (TWD)</label>
                     <input type="number" id="in-amount" value="1000000" class="w-full px-2 border-2 border-slate-400 rounded-lg focus:border-blue-500 outline-none">
@@ -68,15 +70,19 @@
                     <input type="number" id="in-days" value="365" class="w-full px-2 border-2 border-slate-400 rounded-lg focus:border-blue-500 outline-none">
                 </div>
                 <div>
-                    <label class="block text-xs font-black text-black mb-1">台幣信貸利率 (%)</label>
+                    <label class="block text-xs font-black text-black mb-1">台幣信貸利率(%)</label>
                     <input type="number" id="in-loan" step="0.01" value="2.8" class="w-full px-2 border-2 border-blue-400 text-blue-900 rounded-lg focus:border-blue-600 outline-none">
+                </div>
+                <div class="relative">
+                    <label class="block text-[10px] md:text-xs font-black text-red-600 mb-1 leading-tight">⚠️預期利率變動(%)<br/><span class="text-[9px] text-gray-500">(如降2碼填 -0.5)</span></label>
+                    <input type="number" id="in-stress" step="0.1" value="0" class="w-full px-2 border-2 stress-field rounded-lg outline-none focus:border-red-600">
                 </div>
             </div>
 
             <div class="grid grid-cols-3 gap-3 pt-2 border-t-2 border-slate-200">
                 <div class="flex items-end gap-2">
                     <div class="flex-1">
-                        <label class="block text-xs font-black text-black mb-1">00865B 殖利率(%)</label>
+                        <label class="block text-[11px] font-black text-black mb-1">00865B 當前殖利率(%)</label>
                         <input type="number" id="in-yield" step="0.01" value="5.0" class="w-full px-2 border-2 border-slate-400 rounded-lg transition-all outline-none focus:border-blue-500">
                     </div>
                     <label class="flex flex-col items-center justify-center pb-2 cursor-pointer w-8">
@@ -87,7 +93,7 @@
 
                 <div class="flex items-end gap-2">
                     <div class="flex-1">
-                        <label class="block text-xs font-black text-black mb-1">進場 USD/TWD</label>
+                        <label class="block text-[11px] font-black text-black mb-1">進場 USD/TWD</label>
                         <input type="number" id="in-entry" step="0.01" value="32.50" class="w-full px-2 border-2 border-slate-400 rounded-lg transition-all outline-none focus:border-blue-500">
                     </div>
                     <label class="flex flex-col items-center justify-center pb-2 cursor-pointer w-8">
@@ -98,7 +104,7 @@
 
                 <div class="flex items-end gap-2">
                     <div class="flex-1">
-                        <label class="block text-xs font-black text-black mb-1">當前/預估匯率</label>
+                        <label class="block text-[11px] font-black text-black mb-1">當前/預估匯率</label>
                         <input type="number" id="in-target" step="0.01" value="32.00" class="w-full px-2 border-2 border-slate-400 rounded-lg transition-all outline-none focus:border-blue-500">
                     </div>
                     <label class="flex flex-col items-center justify-center pb-2 cursor-pointer w-8">
@@ -115,23 +121,18 @@
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdzXOfzWMndCNLhzXY1-P487LQPfqQQBS0VAyZgz64vDKNwpBWna2vcH-uNU-cGziUERjJZBKvsnle/pub?output=csv";
     const FX_API_URL = "https://open.er-api.com/v6/latest/USD";
 
-    const inputIds = ['in-amount', 'in-days', 'in-loan', 'in-yield', 'in-entry', 'in-target'];
+    const inputIds = ['in-amount', 'in-days', 'in-loan', 'in-stress', 'in-yield', 'in-entry', 'in-target'];
     const lockIds = ['yield', 'entry', 'target'];
 
-    // 系統初始化
     function initializeSystem() {
-        // 讀取數值記憶
         inputIds.forEach(id => {
-            if(localStorage.getItem(id)) {
-                document.getElementById(id).value = localStorage.getItem(id);
-            }
+            if(localStorage.getItem(id)) document.getElementById(id).value = localStorage.getItem(id);
             document.getElementById(id).addEventListener('input', () => {
                 localStorage.setItem(id, document.getElementById(id).value);
                 updateAnalysis();
             });
         });
 
-        // 讀取鎖定記憶
         lockIds.forEach(field => {
             const isLocked = localStorage.getItem(`lock_${field}`) === 'true';
             document.getElementById(`lock-${field}`).checked = isLocked;
@@ -141,34 +142,29 @@
         fetchAllData();
     }
 
-    // 切換鎖定狀態
-    function toggleLock(field) {
-        applyLockUI(field, false);
-    }
+    function toggleLock(field) { applyLockUI(field, false); }
 
-    // 處理 UI 變化 (移除變色邏輯，只改文字與存檔)
     function applyLockUI(field, isInit = false) {
         const isLocked = document.getElementById(`lock-${field}`).checked;
         const label = document.getElementById(`label-${field}`);
+        const input = document.getElementById(`in-${field}`);
         
         localStorage.setItem(`lock_${field}`, isLocked);
 
         if(isLocked) {
             label.innerText = "鎖定";
             label.className = "text-[10px] font-black text-red-600 mb-1";
+            input.classList.add('locked-field');
         } else {
             label.innerText = "自動";
             label.className = "text-[10px] font-black text-slate-500 mb-1";
+            input.classList.remove('locked-field');
             if(!isInit) fetchAllData();
         }
     }
 
-    // 手動同步
-    function triggerManualFetch() {
-        fetchAllData();
-    }
+    function triggerManualFetch() { fetchAllData(); }
 
-    // 資料同步
     async function fetchAllData() {
         const status = document.getElementById('sync-status');
         status.innerText = "⏳ 同步中...";
@@ -177,20 +173,16 @@
         try {
             const fxRes = await fetch(FX_API_URL);
             const fxData = await fxRes.json();
-            const liveTwdRate = fxData.rates.TWD;
-            if(liveTwdRate && !document.getElementById('lock-target').checked) {
-                document.getElementById('in-target').value = liveTwdRate.toFixed(2);
-                localStorage.setItem('in-target', liveTwdRate.toFixed(2));
+            if(fxData.rates.TWD && !document.getElementById('lock-target').checked) {
+                document.getElementById('in-target').value = fxData.rates.TWD.toFixed(2);
+                localStorage.setItem('in-target', fxData.rates.TWD.toFixed(2));
             }
 
             const sheetRes = await fetch(CSV_URL);
             const csv = await sheetRes.text();
-            const rows = csv.split('\n').map(r => r.split(','));
-
-            rows.forEach(row => {
+            csv.split('\n').map(r => r.split(',')).forEach(row => {
                 const key = row[0] ? row[0].trim() : "";
                 const val = row[1] ? parseFloat(row[1].trim()) : null;
-                
                 if(!isNaN(val)) {
                     if(key.includes("殖利率") && !document.getElementById('lock-yield').checked) {
                         document.getElementById('in-yield').value = val;
@@ -213,17 +205,19 @@
         }
     }
 
-    // 計算與更新畫面
     function updateAnalysis() {
         const amount = parseFloat(document.getElementById('in-amount').value) || 0;
         const days = parseFloat(document.getElementById('in-days').value) || 1;
         const loan = parseFloat(document.getElementById('in-loan').value) || 0;
-        const yield = parseFloat(document.getElementById('in-yield').value) || 0;
+        const currentYield = parseFloat(document.getElementById('in-yield').value) || 0;
+        const stressRate = parseFloat(document.getElementById('in-stress').value) || 0;
         const entry = parseFloat(document.getElementById('in-entry').value) || 1;
         const target = parseFloat(document.getElementById('in-target').value) || 1;
 
+        // 【核心優化】計算有效殖利率 (當前殖利率 + 預期變化)
+        const effectiveYield = currentYield + stressRate;
         const timeFactor = days / 365;
-        const spreadPercent = (yield - loan) / 100;
+        const spreadPercent = (effectiveYield - loan) / 100;
         
         const interestGain = amount * spreadPercent * timeFactor;
         const fxLoss = amount * ((target - entry) / entry);
@@ -231,6 +225,7 @@
         const bufferPercent = spreadPercent * timeFactor;
         const breakeven = entry * (1 - bufferPercent);
 
+        document.getElementById('label-effective-yield').innerText = `(實質 ${effectiveYield.toFixed(2)}%)`;
         document.getElementById('out-interest').innerText = `NT$ ${Math.round(interestGain).toLocaleString()}`;
         document.getElementById('out-fx').innerText = `NT$ ${Math.round(fxLoss).toLocaleString()}`;
         document.getElementById('out-total').innerText = `NT$ ${Math.round(total).toLocaleString()}`;
@@ -241,15 +236,17 @@
         document.getElementById('fx-card').className = fxLoss >= 0 ? "bg-emerald-50 border-2 border-emerald-200 p-2 rounded-lg flex flex-col justify-center" : "bg-red-50 border-2 border-red-200 p-2 rounded-lg flex flex-col justify-center";
         document.getElementById('out-fx').className = fxLoss >= 0 ? "text-xl font-black leading-none text-emerald-800" : "text-xl font-black leading-none text-red-800";
 
+        // 動態警告顏色：如果利差被降息吃光變負數
+        const spreadColor = spreadPercent >= 0 ? "text-blue-700" : "text-red-600 bg-red-100 px-1 rounded";
+
         document.getElementById('formula-detail').innerHTML = `
-            <p>1. 年化利差: ${yield.toFixed(2)}% - ${loan.toFixed(2)}% = <span class="text-blue-700">${(yield-loan).toFixed(2)}%</span></p>
-            <p>2. 持有緩衝: ${(yield-loan).toFixed(2)}% × (${days}/365) = <span class="text-blue-700">${(bufferPercent*100).toFixed(2)}%</span></p>
+            <p>1. 實質年化利差: (${currentYield.toFixed(2)}%<span class="text-red-600">${stressRate >= 0 ? '+'+stressRate : stressRate}</span>%) - ${loan.toFixed(2)}% = <span class="${spreadColor} font-black">${(effectiveYield-loan).toFixed(2)}%</span></p>
+            <p>2. 期間匯率防護罩: ${(effectiveYield-loan).toFixed(2)}% × (${days}/365) = <span class="${spreadColor}">${(bufferPercent*100).toFixed(2)}%</span></p>
             <p>3. 容忍底線: ${entry.toFixed(2)} × (1 - ${(bufferPercent*100).toFixed(2)}%) = <span class="text-red-600 text-xl font-black bg-yellow-100 px-1 rounded">${breakeven.toFixed(3)}</span></p>
-            <p class="mt-1 pt-1 border-t border-slate-300 text-sm">👉 美金不跌破 <span class="font-black text-red-600">${breakeven.toFixed(3)}</span> 即保本獲利。</p>
+            <p class="mt-1 pt-1 border-t border-slate-300 text-sm">👉 ${spreadPercent < 0 ? '<span class="text-red-600 font-black">警告：實質利差已轉負，匯率防護失效！</span>' : '美金不跌破 <span class="font-black text-red-600">' + breakeven.toFixed(3) + '</span> 即保本獲利。'}</p>
         `;
     }
 
-    // 啟動
     window.onload = initializeSystem;
 </script>
 
