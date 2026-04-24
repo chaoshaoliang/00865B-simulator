@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>借台幣投美債套利試算 (TWD/USD Arbitrage)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        input[type=range] { accent-color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-slate-100 p-4 md:p-8 font-sans">
+
+<div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-10">
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 border-b pb-6">
+        <div class="mb-4 lg:mb-0">
+            <h1 class="text-2xl font-bold text-gray-800">借台幣投美債套利試算 (00865B)</h1>
+            <p id="status-message" class="text-sm font-medium mt-2">狀態載入中...</p>
+        </div>
+        
+        <div class="flex flex-wrap gap-4 md:gap-8 text-right">
+            <div>
+                <p class="text-sm text-gray-500">損益兩平匯率</p>
+                <p id="out-breakeven" class="text-xl font-bold text-gray-900">--</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500">利差收益</p>
+                <p id="out-interest" class="text-xl font-bold text-gray-900">--</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500">匯兌損益</p>
+                <p id="out-fx" class="text-xl font-bold">--</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500">最終淨利</p>
+                <p id="out-total" class="text-xl font-bold">--</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-8 mb-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 bg-gray-50 p-6 rounded-xl border border-gray-100">
+            <div class="w-full h-64 relative">
+                <h2 class="text-md font-semibold text-gray-700 mb-2 absolute top-0 left-0">損益結構拆解</h2>
+                <canvas id="barChart"></canvas>
+            </div>
+            
+            <div class="w-full h-64 relative">
+                <h2 class="text-md font-semibold text-gray-700 mb-2 absolute top-0 left-0">匯率變動對總損益之影響 (敏感度分析)</h2>
+                <canvas id="lineChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="bg-gray-50 p-6 rounded-xl border border-gray-100 text-center">
+            <h2 class="text-sm font-semibold text-gray-600 mb-6">利差保護防線狀態</h2>
+            <div class="relative w-full max-w-3xl mx-auto mb-4">
+                <div id="marker-breakeven" class="absolute -top-8 left-0 transform -translate-x-1/2">
+                    <div class="bg-white border text-gray-600 text-xs px-2 py-1 rounded shadow-sm font-bold">
+                        損益兩平: <span id="bar-breakeven-val"></span>
+                    </div>
+                </div>
+                <div class="absolute -top-8 right-0 transform translate-x-1/2">
+                    <div class="bg-white border text-blue-600 text-xs px-2 py-1 rounded shadow-sm font-bold">
+                        當前匯率: <span id="bar-entry-val"></span>
+                    </div>
+                </div>
+                <div class="h-4 w-full rounded-full bg-gradient-to-r from-red-500 via-yellow-400 to-green-500 relative shadow-inner">
+                    <div id="marker-current" class="absolute top-[-4px] bottom-[-4px] w-1.5 bg-gray-900 shadow-md transition-all duration-300 z-10" style="left: 50%;"></div>
+                </div>
+                <div class="text-center mt-3 font-bold text-gray-700 text-sm">
+                    目標匯率落點: <span id="bar-target-val" class="text-blue-600"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 bg-white p-4">
+        <div class="flex items-center justify-between">
+            <label class="text-gray-700 font-medium w-36">台幣借貸利率 (%)</label>
+            <input type="range" id="in-loan" min="1.0" max="4.0" step="0.1" value="2.8" class="w-full mx-4">
+            <input type="number" id="val-loan" value="2.8" step="0.1" class="w-20 text-center border rounded py-1 px-2 font-bold focus:ring-blue-200 outline-none">
+        </div>
+        <div class="flex items-center justify-between">
+            <label class="text-gray-700 font-medium w-36">美債殖利率 (%)</label>
+            <input type="range" id="in-yield" min="3.0" max="7.0" step="0.1" value="5.0" class="w-full mx-4">
+            <input type="number" id="val-yield" value="5.0" step="0.1" class="w-20 text-center border rounded py-1 px-2 font-bold focus:ring-blue-200 outline-none">
+        </div>
+        <div class="flex items-center justify-between">
+            <label class="text-gray-700 font-medium w-36">當前 USD/TWD</label>
+            <input type="range" id="in-entry" min="29.0" max="35.0" step="0.05" value="32.50" class="w-full mx-4">
+            <input type="number" id="val-entry" value="32.50" step="0.05" class="w-20 text-center border rounded py-1 px-2 font-bold focus:ring-blue-200 outline-none">
+        </div>
+        <div class="flex items-center justify-between">
+            <label class="text-gray-700 font-medium w-36">目標 USD/TWD</label>
+            <input type="range" id="in-target" min="29.0" max="35.0" step="0.05" value="31.50" class="w-full mx-4">
+            <input type="number" id="val-target" value="31.50" step="0.05" class="w-20 text-center border rounded py-1 px-2 font-bold focus:ring-blue-200 outline-none">
+        </div>
+    </div>
+</div>
+
+<script>
+    // 註冊 Chart.js 標註套件
+    Chart.register(window['chartjs-plugin-annotation']);
+
+    const amount = 1000000; // 本金 100 萬
+    let barChartInstance = null;
+    let lineChartInstance = null;
+
+    const inputs = ['loan', 'yield', 'entry', 'target'];
+    inputs.forEach(id => {
+        document.getElementById(`in-${id}`).addEventListener('input', (e) => {
+            document.getElementById(`val-${id}`).value = e.target.value;
+            calculateAndUpdate();
+        });
+        document.getElementById(`val-${id}`).addEventListener('input', (e) => {
+            document.getElementById(`in-${id}`).value = e.target.value;
+            calculateAndUpdate();
+        });
+    });
+
+    function initCharts() {
+        const barCtx = document.getElementById('barChart').getContext('2d');
+        barChartInstance = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ['利息收益', '匯兌損益', '總淨損益'],
+                datasets: [{
+                    data: [0, 0, 0],
+                    backgroundColor: ['#16a34a', '#dc2626', '#dc2626'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                indexAxis: 'y', // 水平長條圖
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: '#e5e7eb' } },
+                    y: { grid: { display: false } }
+                }
+            }
+        });
+
+        const lineCtx = document.getElementById('lineChart').getContext('2d');
+        lineChartInstance = new Chart(lineCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `總損益: NT$ ${Math.round(ctx.raw).toLocaleString()}`
+                        }
+                    },
+                    annotation: {
+                        annotations: {
+                            zeroLine: { type: 'line', yMin: 0, yMax: 0, borderColor: '#374151', borderWidth: 1 },
+                            breakevenLine: { type: 'line', scaleID: 'x', value: 0, borderColor: '#374151', borderWidth: 1, borderDash: [5, 5] },
+                            targetPoint: { type: 'point', xValue: 0, yValue: 0, backgroundColor: '#dc2626', radius: 6 }
+                        }
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'USD/TWD 匯率' } },
+                    y: { title: { display: true, text: '總損益 (TWD)' } }
+                }
+            }
+        });
+    }
+
+    function calculateAndUpdate() {
+        const loanRate = parseFloat(document.getElementById('val-loan').value);
+        const bondYield = parseFloat(document.getElementById('val-yield').value);
+        const entryFx = parseFloat(document.getElementById('val-entry').value);
+        const targetFx = parseFloat(document.getElementById('val-target').value);
+
+        // 核心計算
+        const netSpread = bondYield - loanRate;
+        const interestIncome = amount * (netSpread / 100);
+        const fxImpact = amount * ((targetFx - entryFx) / entryFx);
+        const totalProfit = interestIncome + fxImpact;
+        const breakevenFx = entryFx * (1 - (netSpread / 100));
+
+        // 更新頂部文字數據
+        document.getElementById('out-breakeven').innerText = breakevenFx.toFixed(3);
+        document.getElementById('out-interest').innerText = `NT$ ${Math.round(interestIncome).toLocaleString()}`;
+        document.getElementById('out-fx').innerText = `NT$ ${Math.round(fxImpact).toLocaleString()}`;
+        document.getElementById('out-total').innerText = `NT$ ${Math.round(totalProfit).toLocaleString()}`;
+
+        // 狀態與顏色
+        const statusEl = document.getElementById('status-message');
+        if (totalProfit >= 0) {
+            document.getElementById('out-total').className = 'text-xl font-bold text-green-600';
+            document.getElementById('out-fx').className = fxImpact >= 0 ? 'text-xl font-bold text-green-600' : 'text-xl font-bold text-red-500';
+            statusEl.className = 'text-sm font-medium mt-2 text-green-600';
+            statusEl.innerText = '✅ 目前情境為【獲利】，匯率變動尚在利差緩衝範圍內。';
+        } else {
+            document.getElementById('out-total').className = 'text-xl font-bold text-red-600';
+            document.getElementById('out-fx').className = 'text-xl font-bold text-red-600';
+            statusEl.className = 'text-sm font-medium mt-2 text-red-600';
+            statusEl.innerText = '⚠️ 目前情境為【虧損】，匯率貶值幅度已超過利差收益。';
+        }
+
+        // 更新長條圖 (Bar Chart)
+        barChartInstance.data.datasets[0].data = [interestIncome, fxImpact, totalProfit];
+        barChartInstance.data.datasets[0].backgroundColor = [
+            '#16a34a', 
+            fxImpact >= 0 ? '#16a34a' : '#dc2626', 
+            totalProfit >= 0 ? '#16a34a' : '#dc2626'
+        ];
+        barChartInstance.update();
+
+        // 更新折線圖 (Line Chart) 敏感度分析
+        const labels = [];
+        const data = [];
+        for (let rate = 29.0; rate <= 34.0; rate += 0.5) {
+            labels.push(rate.toFixed(1));
+            const simFxImpact = amount * ((rate - entryFx) / entryFx);
+            data.push(interestIncome + simFxImpact);
+        }
+        
+        lineChartInstance.data.labels = labels;
+        lineChartInstance.data.datasets = [{
+            data: data,
+            borderColor: '#2563eb',
+            borderWidth: 3,
+            fill: {
+                target: 'origin',
+                above: 'rgba(34, 197, 94, 0.1)',   // 獲利區間淡綠色
+                below: 'rgba(239, 68, 68, 0.1)'    // 虧損區間淡紅色
+            },
+            pointRadius: 0
+        }];
+        
+        // 更新折線圖標註點 (損益兩平線與目標匯率點)
+        lineChartInstance.options.plugins.annotation.annotations.breakevenLine.value = breakevenFx.toFixed(1);
+        lineChartInstance.options.plugins.annotation.annotations.targetPoint.xValue = targetFx.toFixed(1);
+        lineChartInstance.options.plugins.annotation.annotations.targetPoint.yValue = totalProfit;
+        lineChartInstance.options.plugins.annotation.annotations.targetPoint.backgroundColor = totalProfit >= 0 ? '#16a34a' : '#dc2626';
+        lineChartInstance.update();
+
+        // 更新漸層條
+        document.getElementById('bar-breakeven-val').innerText = breakevenFx.toFixed(2);
+        document.getElementById('bar-entry-val').innerText = entryFx.toFixed(2);
+        document.getElementById('bar-target-val').innerText = targetFx.toFixed(2);
+        
+        let percentPos = ((targetFx - breakevenFx) / (entryFx - breakevenFx)) * 100;
+        percentPos = Math.max(-10, Math.min(percentPos, 110));
+        document.getElementById('marker-current').style.left = `${percentPos}%`;
+    }
+
+    // 初始化與首次計算
+    initCharts();
+    calculateAndUpdate();
+</script>
+
+</body>
+</html>
