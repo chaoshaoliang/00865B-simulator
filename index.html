@@ -2,154 +2,246 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>00865B 套利監控系統 (自動化版)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>00865B 套利分析</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 針對 iPad 與觸控優化 */
+        input[type="number"] { font-size: 16px; -webkit-appearance: none; }
+        .locked-field { background-color: #fffbeb !important; border-color: #fde047 !important; color: #92400e !important; }
+        input:checked ~ .dot { transform: translateX(100%); }
+        input:checked ~ .lock-bg { background-color: #fbbf24; }
+        .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); }
+    </style>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-5xl mx-auto bg-white p-8 rounded-3xl shadow-2xl">
-        <div class="flex justify-between items-center mb-10 border-b pb-6">
-            <div>
-                <h1 class="text-3xl font-extrabold text-blue-900">00865B 套利戰情室</h1>
-                <p id="api-status" class="text-xs text-gray-400 mt-2 italic">正在獲取市場即時數據...</p>
-            </div>
+<body class="bg-slate-100 p-2 md:p-6 font-sans text-slate-900">
+
+<div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+    <div class="bg-slate-800 p-5 text-white flex justify-between items-center">
+        <div>
+            <h1 class="text-xl font-black tracking-tighter text-blue-400">00865B 套利分析</h1>
+            <p id="sync-status" class="text-[10px] text-slate-400 mt-0.5 tracking-widest uppercase">等待同步 Google Sheets...</p>
+        </div>
+        <div class="flex items-center gap-4">
             <div class="text-right">
-                <span class="text-sm text-gray-500">計算基準：台幣 100 萬</span>
-                <div id="total-profit" class="text-3xl font-black mt-1">NT$ 0</div>
+                <p class="text-[9px] uppercase font-bold text-slate-500">預計總淨利 (TWD)</p>
+                <p id="out-total" class="text-2xl font-black">NT$ 0</p>
             </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            <div class="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-                <p class="text-blue-600 font-bold mb-1">利差年化收益</p>
-                <p id="interest-gain" class="text-2xl font-bold">NT$ 0</p>
-            </div>
-            <div id="fx-box" class="bg-red-50 p-6 rounded-2xl border border-red-100">
-                <p id="fx-label" class="text-red-600 font-bold mb-1">匯兌預期損益</p>
-                <p id="fx-impact" class="text-2xl font-bold">NT$ 0</p>
-            </div>
-            <div class="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                <p class="text-gray-600 font-bold mb-1">損益兩平匯率</p>
-                <p id="breakeven-point" class="text-2xl font-bold">0.000</p>
-            </div>
-        </div>
-
-        <div class="h-64 mb-10">
-            <canvas id="mainChart"></canvas>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div class="space-y-6">
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">台幣信貸利率 (%) <small>(會自動儲存)</small></label>
-                    <input type="number" id="loan-rate" step="0.01" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg font-bold text-blue-800">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">美債 (00865B) 殖利率 (%)</label>
-                    <input type="number" id="bond-yield" step="0.01" value="4.9" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg">
-                </div>
-            </div>
-            <div class="space-y-6">
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">進場/當前匯率 (自動更新)</label>
-                    <div class="flex gap-2">
-                        <input type="number" id="entry-fx" step="0.01" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg font-bold text-green-700">
-                        <button onclick="fetchFxRate()" class="px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">更新</button>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">目標/離場匯率</label>
-                    <input type="number" id="target-fx" step="0.01" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg font-bold text-orange-600">
-                </div>
-            </div>
+            <button onclick="fetchCloudData()" class="bg-blue-600 hover:bg-blue-500 p-2 rounded-lg transition active:scale-95 shadow-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
         </div>
     </div>
 
-    <script>
-        const BASE_AMOUNT = 1000000;
-        let chart;
+    <div class="p-4 space-y-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="bg-blue-50 border border-blue-100 p-3 rounded-xl">
+                <p class="text-[10px] font-bold text-blue-600 mb-0.5">利息淨收益</p>
+                <p id="out-interest" class="text-lg font-black text-blue-900">NT$ 0</p>
+            </div>
+            <div id="fx-card" class="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                <p id="fx-label" class="text-[10px] font-bold text-slate-500 mb-0.5">匯兌損益</p>
+                <p id="out-fx" class="text-lg font-black text-slate-900">NT$ 0</p>
+            </div>
+            <div class="bg-emerald-50 border border-emerald-100 p-3 rounded-xl">
+                <p class="text-[10px] font-bold text-emerald-700 mb-0.5">利差緩衝度</p>
+                <p id="out-buffer" class="text-lg font-black text-emerald-900">0.00%</p>
+            </div>
+            <div class="bg-amber-50 border border-amber-100 p-3 rounded-xl">
+                <p class="text-[10px] font-bold text-amber-700 mb-0.5">損益兩平匯率</p>
+                <p id="out-breakeven" class="text-lg font-black text-amber-900">0.000</p>
+            </div>
+        </div>
 
-        // 初始化時嘗試讀取本地儲存的設定
-        document.getElementById('loan-rate').value = localStorage.getItem('loanRate') || 2.8;
-        document.getElementById('entry-fx').value = localStorage.getItem('entryFx') || 32.5;
-        document.getElementById('target-fx').value = localStorage.getItem('targetFx') || 32.0;
+        <div class="bg-slate-900 rounded-xl p-4 text-slate-300 font-mono text-xs leading-relaxed border-l-4 border-blue-500">
+            <p class="text-blue-400 font-bold mb-1 underline">📊 分析邏輯拆解</p>
+            <div id="formula-detail" class="space-y-1">
+                </div>
+        </div>
 
-        // 監聽輸入並自動儲存
-        const inputs = ['loan-rate', 'bond-yield', 'entry-fx', 'target-fx'];
-        inputs.forEach(id => {
-            document.getElementById(id).addEventListener('input', () => {
-                if (id !== 'bond-yield') localStorage.setItem(id.replace('-', ''), document.getElementById(id).value);
-                updateUI();
-            });
+        <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-5">
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">投資本金 (TWD)</label>
+                    <input type="number" id="in-amount" value="1000000" class="w-full p-2 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-blue-400 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">持有天數</label>
+                    <input type="number" id="in-days" value="365" class="w-full p-2 border rounded-xl font-bold bg-white focus:ring-2 focus:ring-blue-400 outline-none">
+                </div>
+                <div class="col-span-2 md:col-span-1">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">台幣信貸年利率 (%)</label>
+                    <input type="number" id="in-loan" step="0.01" value="2.8" class="w-full p-2 border border-blue-200 rounded-xl font-bold text-blue-600 bg-white">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-slate-200">
+                <div class="flex items-center gap-3">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">00865B 殖利率 (%)</label>
+                        <input type="number" id="in-yield" step="0.01" value="5.0" class="w-full p-2 border rounded-xl font-bold bg-white transition-all">
+                    </div>
+                    <label class="flex flex-col items-center">
+                        <span class="text-[9px] font-bold text-slate-400 mb-1" id="label-yield">自動</span>
+                        <div class="relative w-10 h-5">
+                            <input type="checkbox" id="lock-yield" class="sr-only" onchange="toggleLock('yield')">
+                            <div class="lock-bg block bg-slate-300 w-10 h-5 rounded-full transition"></div>
+                            <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition duration-200"></div>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">進場 USD/TWD</label>
+                        <input type="number" id="in-entry" step="0.01" value="32.50" class="w-full p-2 border rounded-xl font-bold bg-white transition-all">
+                    </div>
+                    <label class="flex flex-col items-center">
+                        <span class="text-[9px] font-bold text-slate-400 mb-1" id="label-entry">自動</span>
+                        <div class="relative w-10 h-5">
+                            <input type="checkbox" id="lock-entry" class="sr-only" onchange="toggleLock('entry')">
+                            <div class="lock-bg block bg-slate-300 w-10 h-5 rounded-full transition"></div>
+                            <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition duration-200"></div>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">出場 USD/TWD</label>
+                        <input type="number" id="in-target" step="0.01" value="32.00" class="w-full p-2 border rounded-xl font-bold bg-white transition-all">
+                    </div>
+                    <label class="flex flex-col items-center">
+                        <span class="text-[9px] font-bold text-slate-400 mb-1" id="label-target">自動</span>
+                        <div class="relative w-10 h-5">
+                            <input type="checkbox" id="lock-target" class="sr-only" onchange="toggleLock('target')">
+                            <div class="lock-bg block bg-slate-300 w-10 h-5 rounded-full transition"></div>
+                            <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition duration-200"></div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <p class="text-center text-[10px] text-slate-400 italic">
+            * 系統會自動記錄您的「信貸利率」，下次開啟無需重複輸入。
+        </p>
+    </div>
+</div>
+
+<script>
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdzXOfzWMndCNLhzXY1-P487LQPfqQQBS0VAyZgz64vDKNwpBWna2vcH-uNU-cGziUERjJZBKvsnle/pub?output=csv";
+
+    // 讀取記憶
+    if(localStorage.getItem('00865b_loan')) {
+        document.getElementById('in-loan').value = localStorage.getItem('00865b_loan');
+    }
+
+    // 綁定輸入事件
+    const inputIds = ['in-amount', 'in-days', 'in-loan', 'in-yield', 'in-entry', 'in-target'];
+    inputIds.forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+            if(id === 'in-loan') localStorage.setItem('00865b_loan', document.getElementById(id).value);
+            updateAnalysis();
         });
+    });
 
-        // 自動抓取匯率 (使用公開免費 API)
-        async function fetchFxRate() {
-            try {
-                document.getElementById('api-status').innerText = "正在更新匯率...";
-                const res = await fetch('https://open.er-api.com/v6/latest/USD');
-                const data = await res.json();
-                const twdRate = data.rates.TWD;
-                if (twdRate) {
-                    document.getElementById('entry-fx').value = twdRate.toFixed(2);
-                    localStorage.setItem('entryFx', twdRate.toFixed(2));
-                    document.getElementById('api-status').innerText = `數據同步成功 (USD/TWD: ${twdRate.toFixed(2)})`;
-                    updateUI();
-                }
-            } catch (e) {
-                document.getElementById('api-status').innerText = "API 更新失敗，請手動輸入。";
-            }
+    function toggleLock(field) {
+        const isLocked = document.getElementById(`lock-${field}`).checked;
+        const input = document.getElementById(`in-${field}`);
+        const label = document.getElementById(`label-${field}`);
+        
+        if(isLocked) {
+            label.innerText = "鎖定";
+            label.className = "text-[9px] font-bold text-amber-500 mb-1";
+            input.classList.add('locked-field');
+        } else {
+            label.innerText = "自動";
+            label.className = "text-[9px] font-bold text-slate-400 mb-1";
+            input.classList.remove('locked-field');
+            fetchCloudData();
         }
+    }
 
-        function updateUI() {
-            const loan = parseFloat(document.getElementById('loan-rate').value);
-            const bond = parseFloat(document.getElementById('bond-yield').value);
-            const entry = parseFloat(document.getElementById('entry-fx').value);
-            const target = parseFloat(document.getElementById('target-fx').value);
+    async function fetchCloudData() {
+        const status = document.getElementById('sync-status');
+        status.innerText = "🔄 同步中...";
+        status.classList.replace('text-slate-400', 'text-blue-400');
 
-            const spreadGain = BASE_AMOUNT * ((bond - loan) / 100);
-            const fxImpact = BASE_AMOUNT * ((target - entry) / entry);
-            const netProfit = spreadGain + fxImpact;
-            const breakeven = entry * (1 - ((bond - loan) / 100));
+        try {
+            const res = await fetch(CSV_URL);
+            const csv = await res.text();
+            const rows = csv.split('\n').map(r => r.split(','));
 
-            // 更新文字
-            document.getElementById('interest-gain').innerText = `NT$ ${Math.round(spreadGain).toLocaleString()}`;
-            document.getElementById('fx-impact').innerText = `NT$ ${Math.round(fxImpact).toLocaleString()}`;
-            document.getElementById('total-profit').innerText = `NT$ ${Math.round(netProfit).toLocaleString()}`;
-            document.getElementById('breakeven-point').innerText = breakeven.toFixed(3);
+            rows.forEach(row => {
+                const key = row[0] ? row[0].trim() : "";
+                const val = row[1] ? parseFloat(row[1].trim()) : null;
 
-            // 視覺回饋
-            document.getElementById('total-profit').className = netProfit >= 0 ? "text-3xl font-black mt-1 text-green-600" : "text-3xl font-black mt-1 text-red-600";
-            document.getElementById('fx-box').className = fxImpact >= 0 ? "bg-green-50 p-6 rounded-2xl border border-green-100" : "bg-red-50 p-6 rounded-2xl border border-red-100";
-            document.getElementById('fx-label').className = fxImpact >= 0 ? "text-green-600 font-bold mb-1" : "text-red-600 font-bold mb-1";
-
-            updateChart(spreadGain, fxImpact);
-        }
-
-        function updateChart(gain, fx) {
-            const ctx = document.getElementById('mainChart').getContext('2d');
-            if (chart) chart.destroy();
-            chart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['利息收益', '匯率變動', '最終淨損益'],
-                    datasets: [{
-                        data: [gain, fx, gain + fx],
-                        backgroundColor: ['#3b82f6', fx >= 0 ? '#10b981' : '#ef4444', (gain + fx) >= 0 ? '#10b981' : '#ef4444']
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } }
+                if(!isNaN(val)) {
+                    if(key.includes("殖利率") && !document.getElementById('lock-yield').checked) {
+                        document.getElementById('in-yield').value = val;
+                    }
+                    if(key.includes("進場匯率") && !document.getElementById('lock-entry').checked) {
+                        document.getElementById('in-entry').value = val;
+                    }
+                    if(key.includes("當前匯率") && !document.getElementById('lock-target').checked) {
+                        document.getElementById('in-target').value = val;
+                    }
                 }
             });
-        }
 
-        // 初始運行
-        fetchFxRate();
-        updateUI();
-    </script>
+            status.innerText = `SYNC OK: ${new Date().toLocaleTimeString()}`;
+            status.classList.replace('text-blue-400', 'text-emerald-400');
+            updateAnalysis();
+
+        } catch (e) {
+            status.innerText = "SYNC FAILED";
+            status.classList.replace('text-blue-400', 'text-red-400');
+        }
+    }
+
+    function updateAnalysis() {
+        const amount = parseFloat(document.getElementById('in-amount').value) || 0;
+        const days = parseFloat(document.getElementById('in-days').value) || 1;
+        const loan = parseFloat(document.getElementById('in-loan').value) || 0;
+        const yield = parseFloat(document.getElementById('in-yield').value) || 0;
+        const entry = parseFloat(document.getElementById('in-entry').value) || 1;
+        const target = parseFloat(document.getElementById('in-target').value) || 1;
+
+        const timeFactor = days / 365;
+        const spreadPercent = (yield - loan) / 100;
+        
+        // 核心計算
+        const interestGain = amount * spreadPercent * timeFactor;
+        const fxLoss = amount * ((target - entry) / entry);
+        const total = interestGain + fxLoss;
+        const bufferPercent = spreadPercent * timeFactor;
+        const breakeven = entry * (1 - bufferPercent);
+
+        // 更新 UI
+        document.getElementById('out-interest').innerText = `NT$ ${Math.round(interestGain).toLocaleString()}`;
+        document.getElementById('out-fx').innerText = `NT$ ${Math.round(fxLoss).toLocaleString()}`;
+        document.getElementById('out-total').innerText = `NT$ ${Math.round(total).toLocaleString()}`;
+        document.getElementById('out-buffer').innerText = (bufferPercent * 100).toFixed(2) + "%";
+        document.getElementById('out-breakeven').innerText = breakeven.toFixed(3);
+
+        // 視覺顏色
+        document.getElementById('out-total').className = total >= 0 ? "text-2xl font-black text-emerald-400" : "text-2xl font-black text-red-400";
+        document.getElementById('fx-card').className = fxLoss >= 0 ? "bg-emerald-50 border border-emerald-100 p-3 rounded-xl" : "bg-red-50 border border-red-100 p-3 rounded-xl";
+        document.getElementById('out-fx').className = fxLoss >= 0 ? "text-lg font-black text-emerald-900" : "text-lg font-black text-red-900";
+
+        // 更新公式說明
+        document.getElementById('formula-detail').innerHTML = `
+            <p>1. 年化利差：${yield.toFixed(2)}% - ${loan.toFixed(2)}% = <span class="text-white">${(yield-loan).toFixed(2)}%</span></p>
+            <p>2. 持有期間收益率：${(yield-loan).toFixed(2)}% × (${days}/365) = <span class="text-white">${(bufferPercent*100).toFixed(2)}%</span></p>
+            <p>3. 匯率容忍底線：${entry.toFixed(2)} × (1 - ${(bufferPercent*100).toFixed(2)}%) = <span class="text-amber-400 font-bold">${breakeven.toFixed(3)}</span></p>
+            <p class="mt-2 text-[10px] text-slate-500">※ 當匯率高於 ${breakeven.toFixed(3)} 時，此套利交易維持獲利狀態。</p>
+        `;
+    }
+
+    // 首次執行同步
+    fetchCloudData();
+</script>
+
 </body>
-</html>
+</html>          
