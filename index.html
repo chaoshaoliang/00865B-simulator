@@ -58,6 +58,14 @@
                 </div>
         </div>
 
+        <!-- 動態對策指引區塊 (★新加入的區塊) -->
+        <div class="bg-slate-100 rounded-lg p-3 border-l-4 border-emerald-500 shadow-sm mt-2">
+            <p class="text-base font-black text-black border-b border-slate-300 pb-1 mb-2">🎯 系統判定對策</p>
+            <div id="strategy-guide" class="space-y-1">
+                <!-- 指引內容將由 JS 動態產生 -->
+            </div>
+        </div>
+
         <div class="bg-white rounded-lg p-3 border-2 border-slate-200 space-y-3">
             <div class="grid grid-cols-4 gap-3">
                 <div>
@@ -240,6 +248,39 @@
             <p>2. 期間匯率防護罩: ${(effectiveYield-loan).toFixed(2)}% × (${days}/365) = <span class="${spreadColor}">${(bufferPercent*100).toFixed(2)}%</span></p>
             <p>3. 容忍底線: ${entry.toFixed(2)} × (1 - ${(bufferPercent*100).toFixed(2)}%) = <span class="text-red-600 text-xl font-black bg-yellow-100 px-1 rounded">${breakeven.toFixed(3)}</span></p>
             <p class="mt-1 pt-1 border-t border-slate-300 text-sm">👉 ${spreadPercent < 0 ? '<span class="text-red-600 font-black">警告：實質利差已轉負，匯率防護失效！</span>' : '美金不跌破 <span class="font-black text-red-600">' + breakeven.toFixed(3) + '</span> 即保本獲利。'}</p>
+        `;
+
+        // --- 自動判定四大情境對策 (★新加入的邏輯) ---
+        let strategyTitle = "";
+        let strategyDesc = "";
+        let strategyAction = "";
+
+        if (stressRate < 0) {
+            if (target < entry) {
+                if (total < 0) {
+                    strategyTitle = "情境 A：最不利 (大幅降息 + 台幣大幅升值)";
+                    strategyDesc = "利息收入減少，且承受嚴重的匯兌損失（賺了利息，賠了匯差）。";
+                    strategyAction = "【降低比重】將資金轉移至台幣計價的低波高息資產（如 00713），或伺機加碼跌深的科技股核心（00662）。";
+                } else {
+                    strategyTitle = "情境 B：中性偏弱 (緩步降息 + 台幣微幅升值)";
+                    strategyDesc = "利息緩步下降，匯損侵蝕部分利息，總報酬為微幅正值或打平。";
+                    strategyAction = "【動態調整】維持基本水位作為現金替代品，等待股市回檔時的加碼子彈。";
+                }
+            } else {
+                strategyTitle = "情境 C：中性偏強 (降息 + 美元強勢)";
+                strategyDesc = "雖然利息變少，但美元升值（台幣貶值）帶來的匯兌收益彌補了利息缺口。";
+                strategyAction = "【安心續抱】在股市動盪時發揮極佳的資產保護力與避險功能。";
+            }
+        } else {
+            strategyTitle = "情境 D：維持現狀 (延遲降息 / 匯率震盪)";
+            strategyDesc = "持續享有高息滾入淨值。";
+            strategyAction = "【當作美元優利定存】作為穩健的現金流蓄水池。";
+        }
+
+        document.getElementById('strategy-guide').innerHTML = `
+            <p class="text-[16px] font-black text-black leading-tight">${strategyTitle}</p>
+            <p class="text-[15px] font-bold text-black leading-tight">${strategyDesc}</p>
+            <p class="text-[16px] font-black text-black mt-1 bg-yellow-200 inline-block px-1 border border-black rounded">💡 對策指引：${strategyAction}</p>
         `;
     }
 
