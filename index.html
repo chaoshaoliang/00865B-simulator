@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>00865B 套利分析 (動態壓測版)</title>
+    <title>00865B 套利分析 (多帳戶版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* 輸入框高度與文字緊湊化 */
-        input[type="number"] { font-size: 18px; font-weight: 900; color: #000000; -webkit-appearance: none; height: 42px; }
+        input[type="number"], select { font-size: 18px; font-weight: 900; color: #000000; -webkit-appearance: none; height: 42px; }
         .locked-field { background-color: #fffbeb !important; border-color: #d97706 !important; color: #92400e !important; }
         .stress-field { background-color: #fef2f2 !important; border-color: #ef4444 !important; color: #991b1b !important; }
         body { color: #000000; }
@@ -18,9 +18,19 @@
 
 <div class="w-full max-w-4xl bg-white rounded-xl shadow-2xl border-2 border-slate-300 flex flex-col" style="max-height: 98vh;">
     <div class="bg-white border-b-2 border-slate-300 p-3 flex justify-between items-center shrink-0">
-        <div class="flex items-end gap-3">
-            <h1 class="text-2xl font-black text-black tracking-tight leading-none">00865B 套利分析</h1>
-            <p id="sync-status" class="text-xs font-bold text-blue-700 leading-none pb-0.5">⏳ 系統啟動中...</p>
+        <div class="flex flex-col">
+            <div class="flex items-end gap-3">
+                <h1 class="text-2xl font-black text-black tracking-tight leading-none">00865B 套利分析</h1>
+                <p id="sync-status" class="text-xs font-bold text-blue-700 leading-none pb-0.5">⏳ 同步中...</p>
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+                <span class="text-xs font-black text-black">帳戶：</span>
+                <select id="user-selector" onchange="switchUser()" class="border-2 border-black rounded px-1 h-7 text-xs font-black bg-white">
+                    </select>
+                <button onclick="addUser()" class="bg-slate-800 text-white px-2 rounded font-black text-xs h-7 hover:bg-black transition">
+                    + 新增
+                </button>
+            </div>
         </div>
         <div class="flex items-center gap-4">
             <div class="text-right flex items-center gap-2">
@@ -54,16 +64,12 @@
         </div>
 
         <div class="bg-slate-100 rounded-lg p-3 border-l-4 border-blue-500 shadow-sm">
-            <div id="formula-detail" class="space-y-1 text-sm md:text-base font-bold text-black leading-tight">
-                </div>
+            <div id="formula-detail" class="space-y-1 text-sm md:text-base font-bold text-black leading-tight"></div>
         </div>
 
-        <!-- 動態對策指引區塊 (★新加入的區塊) -->
-        <div class="bg-slate-100 rounded-lg p-3 border-l-4 border-emerald-500 shadow-sm mt-2">
+        <div class="bg-slate-100 rounded-lg p-3 border-l-4 border-emerald-500 shadow-sm">
             <p class="text-base font-black text-black border-b border-slate-300 pb-1 mb-2">🎯 系統判定對策</p>
-            <div id="strategy-guide" class="space-y-1">
-                <!-- 指引內容將由 JS 動態產生 -->
-            </div>
+            <div id="strategy-guide" class="space-y-1"></div>
         </div>
 
         <div class="bg-white rounded-lg p-3 border-2 border-slate-200 space-y-3">
@@ -81,8 +87,8 @@
                     <input type="number" id="in-loan" step="0.01" value="2.8" class="w-full px-2 border-2 border-blue-400 text-blue-900 rounded-lg focus:border-blue-600 outline-none">
                 </div>
                 <div>
-                    <label class="block text-xs font-black text-red-600 mb-1 truncate" title="⚠️預估變動(%) (如降2碼填-0.5)">
-                        ⚠️預估變動(%) <span class="text-xs text-gray-600 font-bold ml-1">(如降2碼填-0.5)</span>
+                    <label class="block text-xs font-black text-red-600 mb-1 truncate">
+                        ⚠️預估變動(%) <span class="text-xs text-gray-600 font-bold ml-1">(降2碼填-0.5)</span>
                     </label>
                     <input type="number" id="in-stress" step="0.1" value="0" class="w-full px-2 border-2 stress-field rounded-lg outline-none focus:border-red-600">
                 </div>
@@ -133,79 +139,145 @@
     const inputIds = ['in-amount', 'in-days', 'in-loan', 'in-stress', 'in-yield', 'in-entry', 'in-target'];
     const lockIds = ['yield', 'entry', 'target'];
 
+    // 使用者列表管理邏輯
+    let currentUser = localStorage.getItem('current_active_user') || '預設帳戶';
+    let userList = JSON.parse(localStorage.getItem('00865b_user_list')) || ['預設帳戶'];
+
     function initializeSystem() {
+        renderUserSelector();
+        loadCurrentUserSettings();
+
+        // 綁定所有輸入事件，即時存入該使用者存檔
         inputIds.forEach(id => {
-            if(localStorage.getItem(id)) document.getElementById(id).value = localStorage.getItem(id);
             document.getElementById(id).addEventListener('input', () => {
-                localStorage.setItem(id, document.getElementById(id).value);
+                saveCurrentUserSettings();
                 updateAnalysis();
             });
         });
 
         lockIds.forEach(field => {
-            const isLocked = localStorage.getItem(`lock_${field}`) === 'true';
-            document.getElementById(`lock-${field}`).checked = isLocked;
-            applyLockUI(field, true); 
+            document.getElementById(`lock-${field}`).addEventListener('change', () => {
+                saveCurrentUserSettings();
+                applyLockUI(field, false);
+            });
         });
 
         fetchAllData();
     }
 
-    function toggleLock(field) { applyLockUI(field, false); }
+    // 更新使用者選單畫面
+    function renderUserSelector() {
+        const selector = document.getElementById('user-selector');
+        selector.innerHTML = userList.map(u => `<option value="${u}" ${u === currentUser ? 'selected' : ''}>${u}</option>`).join('');
+    }
 
+    // 新增使用者
+    function addUser() {
+        const name = prompt("請輸入新帳戶名稱：");
+        if (name && !userList.includes(name)) {
+            userList.push(name);
+            localStorage.setItem('00865b_user_list', JSON.stringify(userList));
+            currentUser = name;
+            localStorage.setItem('current_active_user', currentUser);
+            renderUserSelector();
+            // 新使用者給予預設值
+            resetInputsToDefault();
+            saveCurrentUserSettings();
+            updateAnalysis();
+        } else if (userList.includes(name)) {
+            alert("名稱已存在！");
+        }
+    }
+
+    // 切換使用者
+    function switchUser() {
+        currentUser = document.getElementById('user-selector').value;
+        localStorage.setItem('current_active_user', currentUser);
+        loadCurrentUserSettings();
+        updateAnalysis();
+        fetchAllData(); // 切換後自動抓一次最新的非鎖定數據
+    }
+
+    // 儲存當前使用者的專屬設定
+    function saveCurrentUserSettings() {
+        const settings = {};
+        inputIds.forEach(id => settings[id] = document.getElementById(id).value);
+        lockIds.forEach(field => settings[`lock_${field}`] = document.getElementById(`lock-${field}`).checked);
+        localStorage.setItem(`00865b_settings_${currentUser}`, JSON.stringify(settings));
+    }
+
+    // 載入當前使用者的專屬設定
+    function loadCurrentUserSettings() {
+        const settings = JSON.parse(localStorage.getItem(`00865b_settings_${currentUser}`));
+        if (settings) {
+            inputIds.forEach(id => document.getElementById(id).value = settings[id] || "");
+            lockIds.forEach(field => {
+                const isLocked = settings[`lock_${field}`] === true;
+                document.getElementById(`lock-${field}`).checked = isLocked;
+                applyLockUI(field, true);
+            });
+        } else {
+            resetInputsToDefault();
+        }
+    }
+
+    function resetInputsToDefault() {
+        // 提供初始預設值
+        document.getElementById('in-amount').value = "1000000";
+        document.getElementById('in-days').value = "365";
+        document.getElementById('in-loan').value = "2.8";
+        document.getElementById('in-stress').value = "0";
+        lockIds.forEach(field => {
+            document.getElementById(`lock-${field}`).checked = false;
+            applyLockUI(field, true);
+        });
+    }
+
+    // 原始功能保留區
     function applyLockUI(field, isInit = false) {
         const isLocked = document.getElementById(`lock-${field}`).checked;
         const label = document.getElementById(`label-${field}`);
-        
-        localStorage.setItem(`lock_${field}`, isLocked);
-
+        const input = document.getElementById(`in-${field}`);
         if(isLocked) {
             label.innerText = "鎖定";
             label.className = "text-[10px] font-black text-red-600 mb-1";
+            input.classList.add('locked-field');
         } else {
             label.innerText = "自動";
             label.className = "text-[10px] font-black text-slate-500 mb-1";
+            input.classList.remove('locked-field');
             if(!isInit) fetchAllData();
         }
     }
 
+    function toggleLock(field) { applyLockUI(field, false); }
     function triggerManualFetch() { fetchAllData(); }
 
     async function fetchAllData() {
         const status = document.getElementById('sync-status');
         status.innerText = "⏳ 同步中...";
         status.className = "text-xs font-bold text-blue-700 leading-none pb-0.5";
-
         try {
             const fxRes = await fetch(FX_API_URL);
             const fxData = await fxRes.json();
             if(fxData.rates.TWD && !document.getElementById('lock-target').checked) {
                 document.getElementById('in-target').value = fxData.rates.TWD.toFixed(2);
-                localStorage.setItem('in-target', fxData.rates.TWD.toFixed(2));
             }
-
             const sheetRes = await fetch(CSV_URL);
             const csv = await sheetRes.text();
             csv.split('\n').map(r => r.split(',')).forEach(row => {
                 const key = row[0] ? row[0].trim() : "";
                 const val = row[1] ? parseFloat(row[1].trim()) : null;
                 if(!isNaN(val)) {
-                    if(key.includes("殖利率") && !document.getElementById('lock-yield').checked) {
-                        document.getElementById('in-yield').value = val;
-                        localStorage.setItem('in-yield', val);
-                    }
-                    if(key.includes("進場匯率") && !document.getElementById('lock-entry').checked) {
-                        document.getElementById('in-entry').value = val;
-                        localStorage.setItem('in-entry', val);
-                    }
+                    if(key.includes("殖利率") && !document.getElementById('lock-yield').checked) document.getElementById('in-yield').value = val;
+                    if(key.includes("進場匯率") && !document.getElementById('lock-entry').checked) document.getElementById('in-entry').value = val;
                 }
             });
-
-            status.innerText = `✅ 已同步 (${new Date().toLocaleTimeString().slice(0,-3)})`;
+            status.innerText = `✅ 已同步 (${new Date().toLocaleTimeString().slice(0,-3)}) - [${currentUser}]`;
             status.className = "text-xs font-bold text-green-700 leading-none pb-0.5";
             updateAnalysis();
         } catch (e) {
-            status.innerText = "❌ 網路離線 (載入記憶數值)";
+            status.innerText = "❌ 網路離線 (載入記憶)";
             status.className = "text-xs font-bold text-red-600 leading-none pb-0.5";
             updateAnalysis();
         }
@@ -223,7 +295,6 @@
         const effectiveYield = currentYield + stressRate;
         const timeFactor = days / 365;
         const spreadPercent = (effectiveYield - loan) / 100;
-        
         const interestGain = amount * spreadPercent * timeFactor;
         const fxLoss = amount * ((target - entry) / entry);
         const total = interestGain + fxLoss;
@@ -242,7 +313,6 @@
         document.getElementById('out-fx').className = fxLoss >= 0 ? "text-xl font-black leading-none text-emerald-800" : "text-xl font-black leading-none text-red-800";
 
         const spreadColor = spreadPercent >= 0 ? "text-blue-700" : "text-red-600 bg-red-100 px-1 rounded";
-
         document.getElementById('formula-detail').innerHTML = `
             <p>1. 實質年化利差: (${currentYield.toFixed(2)}%<span class="text-red-600">${stressRate >= 0 ? '+'+stressRate : stressRate}</span>%) - ${loan.toFixed(2)}% = <span class="${spreadColor} font-black">${(effectiveYield-loan).toFixed(2)}%</span></p>
             <p>2. 期間匯率防護罩: ${(effectiveYield-loan).toFixed(2)}% × (${days}/365) = <span class="${spreadColor}">${(bufferPercent*100).toFixed(2)}%</span></p>
@@ -250,37 +320,33 @@
             <p class="mt-1 pt-1 border-t border-slate-300 text-sm">👉 ${spreadPercent < 0 ? '<span class="text-red-600 font-black">警告：實質利差已轉負，匯率防護失效！</span>' : '美金不跌破 <span class="font-black text-red-600">' + breakeven.toFixed(3) + '</span> 即保本獲利。'}</p>
         `;
 
-        // --- 自動判定四大情境對策 (★新加入的邏輯) ---
-        let strategyTitle = "";
-        let strategyDesc = "";
-        let strategyAction = "";
-
+        // 策略指引判定
+        let sTitle = "", sDesc = "", sAction = "";
         if (stressRate < 0) {
             if (target < entry) {
                 if (total < 0) {
-                    strategyTitle = "情境 A：最不利 (大幅降息 + 台幣大幅升值)";
-                    strategyDesc = "利息收入減少，且承受嚴重的匯兌損失（賺了利息，賠了匯差）。";
-                    strategyAction = "【降低比重】將資金轉移至台幣計價的低波高息資產（如 00713），或伺機加碼跌深的科技股核心（00662）。";
+                    sTitle = "情境 A：最不利 (大幅降息 + 台幣大幅升值)";
+                    sDesc = "利息收入減少，且承受嚴重的匯兌損失。";
+                    sAction = "【降低比重】轉移至台幣低波高息資產或加碼科技股。";
                 } else {
-                    strategyTitle = "情境 B：中性偏弱 (緩步降息 + 台幣微幅升值)";
-                    strategyDesc = "利息緩步下降，匯損侵蝕部分利息，總報酬為微幅正值或打平。";
-                    strategyAction = "【動態調整】維持基本水位作為現金替代品，等待股市回檔時的加碼子彈。";
+                    sTitle = "情境 B：中性偏弱 (緩步降息 + 台幣微幅升值)";
+                    sDesc = "利息緩步下降，匯損侵蝕部分利息，總報酬打平。";
+                    sAction = "【動態調整】維持水位作為加碼子彈。";
                 }
             } else {
-                strategyTitle = "情境 C：中性偏強 (降息 + 美元強勢)";
-                strategyDesc = "雖然利息變少，但美元升值（台幣貶值）帶來的匯兌收益彌補了利息缺口。";
-                strategyAction = "【安心續抱】在股市動盪時發揮極佳的資產保護力與避險功能。";
+                sTitle = "情境 C：中性偏強 (降息 + 美元強勢)";
+                sDesc = "利息變少但匯兌收益彌補缺口。";
+                sAction = "【安心續抱】發揮避險功能。";
             }
         } else {
-            strategyTitle = "情境 D：維持現狀 (延遲降息 / 匯率震盪)";
-            strategyDesc = "持續享有高息滾入淨值。";
-            strategyAction = "【當作美元優利定存】作為穩健的現金流蓄水池。";
+            sTitle = "情境 D：維持現狀 (延遲降息 / 匯率震盪)";
+            sDesc = "持續享有高息滾入。";
+            sAction = "【當作美元優利定存】穩健蓄水池。";
         }
-
         document.getElementById('strategy-guide').innerHTML = `
-            <p class="text-[16px] font-black text-black leading-tight">${strategyTitle}</p>
-            <p class="text-[15px] font-bold text-black leading-tight">${strategyDesc}</p>
-            <p class="text-[16px] font-black text-black mt-1 bg-yellow-200 inline-block px-1 border border-black rounded">💡 對策指引：${strategyAction}</p>
+            <p class="text-[16px] font-black text-black leading-tight">${sTitle}</p>
+            <p class="text-[15px] font-bold text-black leading-tight">${sDesc}</p>
+            <p class="text-[16px] font-black text-black mt-1 bg-yellow-200 inline-block px-1 border border-black rounded">💡 指引：${sAction}</p>
         `;
     }
 
